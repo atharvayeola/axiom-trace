@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://axiom-trace.dev/schemas/axiom_frame_v1_1.json",
+  "title": "Axiom Frame v1.1",
+  "description": "Schema for a single immutable event record in the Axiom Trace vault",
+  "type": "object",
+  "required": [
+    "frame_id",
+    "session_id",
+    "timestamp",
+    "event_type",
+    "actor",
+    "content",
+    "metadata",
+    "vector_key",
+    "prev_hash",
+    "frame_hash"
+  ],
+  "properties": {
+    "frame_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUIDv4 identifier for this frame"
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUIDv4 identifier for the session this frame belongs to"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC timestamp with milliseconds"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "thought",
+        "tool_call",
+        "tool_output",
+        "user_input",
+        "final_result",
+        "system_event",
+        "error"
+      ],
+      "description": "Type of event this frame represents"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["agent", "user", "system", "tool"],
+          "description": "Type of actor"
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Unique identifier for the actor"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional human-readable name"
+        }
+      },
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "object",
+      "description": "Content of the frame - must have exactly one of text or json",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 200000,
+          "description": "Text content (max 200,000 chars)"
+        },
+        "json": {
+          "type": "object",
+          "description": "JSON content (max 1,000,000 bytes serialized)"
+        },
+        "mime_type": {
+          "type": "string",
+          "default": "text/plain",
+          "description": "MIME type of content"
+        },
+        "rationale_summary": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Summary of reasoning (required for thought events)"
+        },
+        "raw_thought": {
+          "type": "string",
+          "maxLength": 50000,
+          "description": "Raw thought content (optional, omitted by default)"
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["text"],
+          "not": { "required": ["json"] }
+        },
+        {
+          "required": ["json"],
+          "not": { "required": ["text"] }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata for the frame",
+      "properties": {
+        "model_name": {
+          "type": "string"
+        },
+        "model_provider": {
+          "type": "string"
+        },
+        "token_usage": {
+          "type": "object",
+          "properties": {
+            "prompt": { "type": "integer" },
+            "completion": { "type": "integer" },
+            "total": { "type": "integer" }
+          },
+          "additionalProperties": false
+        },
+        "latency_ms": {
+          "type": "integer"
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "maxItems": 50
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "tool_args_hash": {
+          "type": "string"
+        },
+        "tool_output_hash": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    },
+    "vector_key": {
+      "type": "string",
+      "maxLength": 512,
+      "description": "Key for vector search indexing"
+    },
+    "prev_hash": {
+      "type": "string",
+      "description": "Hash of the previous frame (empty string for first frame)"
+    },
+    "frame_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of this frame's canonical representation"
+    }
+  },
+  "additionalProperties": false
+}
