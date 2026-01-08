@@ -12,27 +12,16 @@
 pip install axiom-trace
 ```
 
-For development:
-```bash
-git clone https://github.com/your-username/axiom-trace.git
-cd axiom-trace
-pip install -e ".[dev]"
-```
-
 ## Quick Start
-
-### Python SDK
 
 ```python
 from axiom_trace import AxiomTrace
 
-# Create or open a vault
-with AxiomTrace("./my_vault") as trace:
+# Create a vault (defaults to .axiom_trace/ in current directory)
+with AxiomTrace() as trace:
     # Record an event
     frame_id = trace.record({
-        "session_id": "550e8400-e29b-41d4-a716-446655440000",
         "event_type": "thought",
-        "actor": {"type": "agent", "id": "my-agent"},
         "content": {
             "text": "Analyzing user request...",
             "rationale_summary": "Breaking down the problem"
@@ -48,32 +37,59 @@ with AxiomTrace("./my_vault") as trace:
     print(f"Integrity OK: {status['ok']}")
 ```
 
-### With Memvid Cloud (Optional)
+---
 
-For enhanced semantic search, create a `.env` file:
+## Memvid Cloud Integration (Optional)
+
+Axiom Trace uses [Memvid](https://memvid.com) for hybrid semantic search. You can enhance search quality with a Memvid API key.
+
+### Setup in Your Project
+
+1. **Create a `.env` file in your project root:**
 
 ```bash
-# Copy the example and add your key
-cp .env.example .env
+# In your project directory (e.g., my_project/)
+echo "MEMVID_API_KEY=mv2_your_api_key_here" > .env
+
+# Add to .gitignore to keep it secure
+echo ".env" >> .gitignore
 ```
 
-Then edit `.env`:
-```
-MEMVID_API_KEY=your-api-key-here
-```
-
-Or pass it directly in code:
+2. **That's it!** Axiom Trace automatically loads the key:
 
 ```python
-trace = AxiomTrace("./my_vault", memvid_api_key="your-api-key")
+from axiom_trace import AxiomTrace
+
+# Automatically uses MEMVID_API_KEY from your project's .env
+trace = AxiomTrace()
 ```
 
-### Observer Pattern
+### Alternative: Pass Key Directly
+
+```python
+trace = AxiomTrace(memvid_api_key="mv2_your_api_key_here")
+```
+
+### How It Works
+
+```
+your_project/
+├── .env                 ← Put MEMVID_API_KEY here
+├── .gitignore          ← Add .env to keep key secure
+├── main.py             ← from axiom_trace import AxiomTrace
+└── .axiom_trace/       ← Default vault location
+```
+
+When you import `axiom_trace`, it uses `python-dotenv` to load your project's `.env` file automatically.
+
+---
+
+## Observer Pattern
 
 ```python
 from axiom_trace import AxiomTrace, session, observe, set_global_trace
 
-trace = AxiomTrace("./my_vault")
+trace = AxiomTrace()
 set_global_trace(trace)
 
 # Context manager for sessions
@@ -85,12 +101,14 @@ with session(session_id="my-session") as obs:
     obs.record_final_result("The weather in NYC is 72°F and sunny!")
 
 # Decorator for automatic tracing
-@observe(session_id="my-session")
+@observe(event_type="tool_call")
 def search_database(query: str) -> list:
     return ["result1", "result2"]
 ```
 
-### CLI
+---
+
+## CLI
 
 ```bash
 # Record an event from JSON file
@@ -109,6 +127,8 @@ axiom verify --vault ./my_vault
 axiom stats --vault ./my_vault
 ```
 
+---
+
 ## Event Types
 
 | Type | Description |
@@ -121,16 +141,20 @@ axiom stats --vault ./my_vault
 | `system_event` | System notifications |
 | `error` | Error with stack trace |
 
+---
+
 ## Vault Structure
 
 ```
-my_vault/
-├── vault.manifest.json   # Metadata + head hash
-├── vault.lock            # Write lock
-├── vault.mv2             # Memvid index (optional)
-├── frames.jsonl          # Append-only frame storage
-└── axiom.log             # Internal logs
+.axiom_trace/              # Default location (or specify your own)
+├── vault.manifest.json    # Metadata + head hash
+├── vault.lock             # Write lock
+├── vault.mv2              # Memvid index
+├── frames.jsonl           # Append-only frame storage
+└── axiom.log              # Internal logs
 ```
+
+---
 
 ## Integrity Verification
 
@@ -146,27 +170,31 @@ result = trace.verify_integrity()
 # }
 ```
 
-Detects:
-- Modified frame content
-- Deleted frames
-- Reordered frames
-- Manifest tampering
+Detects: modified content, deleted frames, reordered frames, manifest tampering.
 
-## Environment Variables
+---
 
-| Variable | Description |
-|----------|-------------|
-| `MEMVID_API_KEY` | API key for Memvid cloud features (enhanced semantic search) |
+## API Reference
 
-## Publishing (for maintainers)
+### `AxiomTrace(vault_dir=None, memvid_api_key=None, ...)`
 
-The package is automatically published to PyPI when you create a GitHub release:
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `vault_dir` | `.axiom_trace/` | Vault storage location |
+| `memvid_api_key` | From `.env` | Memvid API key for cloud features |
+| `redaction_enabled` | `True` | Auto-redact secrets |
+| `auto_flush` | `True` | Background flush every 5s |
 
-1. Go to GitHub → Releases → "Create a new release"
-2. Tag with version (e.g., `v1.1.0`)
-3. Publish release
+### Methods
 
-The GitHub Actions workflow handles building and uploading to PyPI.
+- `record(event)` → `str` (frame_id)
+- `query(prompt, limit=5, filters=None)` → `list[dict]`
+- `export_session(session_id, out_path, format="md")`
+- `verify_integrity()` → `dict`
+- `stats()` → `dict`
+- `close()`
+
+---
 
 ## License
 

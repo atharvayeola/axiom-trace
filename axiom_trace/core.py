@@ -48,7 +48,7 @@ class AxiomTrace:
     
     def __init__(
         self, 
-        vault_dir: str,
+        vault_dir: str | None = None,
         redaction_enabled: bool = True,
         auto_flush: bool = True,
         size_warning_gb: float = DEFAULT_SIZE_WARNING_GB,
@@ -58,13 +58,18 @@ class AxiomTrace:
         Initialize an AxiomTrace vault.
         
         Args:
-            vault_dir: Path to the vault directory
+            vault_dir: Path to the vault directory. Defaults to '.axiom_trace/' 
+                      in the current working directory if not specified.
             redaction_enabled: Whether to enable automatic redaction
             auto_flush: Whether to enable automatic background flushing
             size_warning_gb: Size threshold for warnings in GB
             memvid_api_key: Optional Memvid API key for cloud features
                            (can also be set via MEMVID_API_KEY env var)
         """
+        # Default to .axiom_trace/ in current working directory
+        if vault_dir is None:
+            vault_dir = os.path.join(os.getcwd(), ".axiom_trace")
+        
         self.vault_dir = Path(vault_dir)
         self.vault_dir.mkdir(parents=True, exist_ok=True)
         
@@ -182,14 +187,30 @@ class AxiomTrace:
         frame_id = str(uuid.uuid4())
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         
+        # Default content if not provided
+        content = event.get("content")
+        if content is None:
+            # Try to build content from 'text' or 'data' fields
+            if "text" in event:
+                content = {"text": event["text"]}
+            elif "data" in event:
+                content = {"json": event["data"]}
+            else:
+                content = {"text": ""}
+        
+        # Default actor if not provided
+        actor = event.get("actor")
+        if actor is None:
+            actor = {"type": "agent", "id": "default"}
+        
         # Build complete frame
         frame = {
             "frame_id": frame_id,
             "session_id": event.get("session_id", str(uuid.uuid4())),
             "timestamp": timestamp,
             "event_type": event.get("event_type"),
-            "actor": event.get("actor"),
-            "content": event.get("content"),
+            "actor": actor,
+            "content": content,
             "metadata": event.get("metadata", {}),
             "vector_key": event.get("vector_key", self._generate_vector_key(event)),
             "prev_hash": "",  # Will be set during flush

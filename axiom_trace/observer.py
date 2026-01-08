@@ -216,23 +216,29 @@ def observe(
     session_id: str | None = None,
     trace: AxiomTrace | None = None,
     actor_id: str = "agent",
+    event_type: str = "tool_call",
     capture_args: bool = True,
     capture_result: bool = True
 ):
     """
     Decorator for observing function calls.
     
-    Records tool_call on entry and tool_output on exit.
+    Records an event on entry and output on exit.
     
     Usage:
-        @axiom.observe(session_id="...")
+        @observe(session_id="...")
         def my_tool(arg1, arg2):
             return result
+        
+        @observe(event_type="function_call")
+        def my_function():
+            pass
     
     Args:
         session_id: Optional session ID (generated if not provided)
         trace: Optional AxiomTrace instance (uses global if not provided)
         actor_id: Actor identifier
+        event_type: Event type for the call (default: "tool_call")
         capture_args: Whether to capture function arguments
         capture_result: Whether to capture function result
     """
@@ -248,9 +254,8 @@ def observe(
                     return func(*args, **kwargs)
             
             sid = session_id or str(uuid.uuid4())
-            obs = ObserverSession(trace, sid, actor_id)
             
-            # Record tool call
+            # Build call args if capturing
             if capture_args:
                 call_args = {
                     "args": [repr(a)[:500] for a in args],
@@ -259,19 +264,41 @@ def observe(
             else:
                 call_args = {}
             
-            obs.record_tool_call(func.__name__, call_args)
+            # Record function call
+            trace.record({
+                "session_id": sid,
+                "event_type": event_type,
+                "actor": {"type": "agent", "id": actor_id},
+                "content": {"json": {"function": func.__name__, "args": call_args}},
+                "metadata": {"tool_name": func.__name__}
+            })
             
             try:
                 result = func(*args, **kwargs)
                 
                 # Record result
                 if capture_result:
-                    obs.record_tool_output(func.__name__, repr(result)[:2000])
+                    output_type = "tool_output" if event_type == "tool_call" else "final_result"
+                    trace.record({
+                        "session_id": sid,
+                        "event_type": output_type,
+                        "actor": {"type": "tool", "id": func.__name__},
+                        "content": {"text": repr(result)[:2000]},
+                        "metadata": {"tool_name": func.__name__}
+                    })
                 
                 return result
                 
             except Exception as e:
-                obs.record_error(e)
+                tb = traceback.format_exception(type(e), e, e.__traceback__)
+                error_text = "".join(tb)[:4000]
+                trace.record({
+                    "session_id": sid,
+                    "event_type": "error",
+                    "actor": {"type": "agent", "id": actor_id},
+                    "content": {"text": error_text},
+                    "metadata": {"error_type": type(e).__name__, "tool_name": func.__name__}
+                })
                 raise
         
         return wrapper
