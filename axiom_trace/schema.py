@@ -25,7 +25,7 @@ class AxiomValidationError(Exception):
 
 
 # Load schema at module import time
-_SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "axiom_frame_v1_1.json"
+_SCHEMA_PATH = Path(__file__).parent / "schemas" / "axiom_frame_v1_1.json"
 _SCHEMA: dict[str, Any] | None = None
 
 

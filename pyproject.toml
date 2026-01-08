@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "axiom-trace"
-version = "1.1.0"
+version = "1.1.1"
 description = "Local-first, append-only trace vault for AI agents with cryptographic integrity"
 readme = "README.md"
 license = "MIT"
@@ -44,6 +44,15 @@ axiom = "axiom_trace.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["axiom_trace"]
+
+[tool.hatch.build.targets.wheel.sources]
+"axiom_trace" = "axiom_trace"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "axiom_trace/**/*.py",
+    "axiom_trace/**/*.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
