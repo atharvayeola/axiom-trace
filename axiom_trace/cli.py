@@ -210,6 +210,193 @@ def stats(
         raise typer.Exit(1)
 
 
+# Color codes for event types
+EVENT_COLORS = {
+    "thought": "\033[36m",      # Cyan
+    "tool_call": "\033[33m",    # Yellow
+    "tool_output": "\033[32m",  # Green
+    "user_input": "\033[35m",   # Magenta
+    "final_result": "\033[32m", # Green
+    "error": "\033[31m",        # Red
+    "system_event": "\033[90m", # Gray
+}
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+
+
+def _format_frame(frame: dict, colorize: bool = True) -> str:
+    """Format a frame for display."""
+    event_type = frame.get("event_type", "unknown")
+    timestamp = frame.get("timestamp", "")[:19]  # Trim to seconds
+    content = frame.get("content", {})
+    
+    # Get display text
+    text = content.get("text", "")
+    if not text and "output" in content:
+        text = content["output"]
+    if not text and "input" in content:
+        text = content["input"]
+    if not text and "json" in content:
+        text = json.dumps(content["json"])[:100]
+    
+    # Truncate long text
+    if len(text) > 120:
+        text = text[:117] + "..."
+    
+    # Format with colors
+    if colorize:
+        color = EVENT_COLORS.get(event_type, "")
+        success_icon = ""
+        if "success" in frame:
+            success_icon = " ✓" if frame["success"] else " ✗"
+        return f"{DIM}{timestamp}{RESET} {color}{BOLD}{event_type:13}{RESET}{success_icon} {text}"
+    else:
+        return f"{timestamp} {event_type:13} {text}"
+
+
+@app.command()
+def log(
+    vault: Annotated[str, typer.Option("--vault", "-v", help="Path to vault")] = ".axiom_trace",
+    limit: Annotated[int, typer.Option("--limit", "-l", help="Number of entries")] = 20,
+    session_filter: Annotated[Optional[str], typer.Option("--session", "-s", help="Filter by session ID")] = None,
+    event_type: Annotated[Optional[str], typer.Option("--type", "-t", help="Filter by event type")] = None,
+    no_color: Annotated[bool, typer.Option("--no-color", help="Disable colors")] = False
+):
+    """
+    Show recent traces in a pretty format.
+    
+    Displays traces with colors and easy-to-read formatting.
+    Perfect for quick debugging and monitoring.
+    
+    Examples:
+        axiom log                    # Show last 20 traces
+        axiom log --limit 50         # Show last 50 traces
+        axiom log --type thought     # Show only thoughts
+        axiom log --session abc123   # Filter by session
+    """
+    import orjson
+    
+    vault_path = Path(vault)
+    frames_file = vault_path / "frames.jsonl"
+    
+    if not frames_file.exists():
+        typer.echo(f"No traces found in {vault}", err=True)
+        typer.echo("Start tracing with: from axiom_trace import trace; trace.log('hello')")
+        raise typer.Exit(0)
+    
+    # Read frames
+    frames = []
+    with open(frames_file, "rb") as f:
+        for line in f:
+            if line.strip():
+                frame = orjson.loads(line)
+                
+                # Apply filters
+                if session_filter and frame.get("session_id") != session_filter:
+                    continue
+                if event_type and frame.get("event_type") != event_type:
+                    continue
+                    
+                frames.append(frame)
+    
+    # Show last N frames
+    frames = frames[-limit:]
+    
+    if not frames:
+        typer.echo("No matching traces found.")
+        raise typer.Exit(0)
+    
+    # Header
+    colorize = not no_color and sys.stdout.isatty()
+    if colorize:
+        typer.echo(f"{BOLD}{'─' * 80}{RESET}")
+        typer.echo(f"{BOLD}AXIOM TRACE LOG{RESET} ({len(frames)} entries)")
+        typer.echo(f"{BOLD}{'─' * 80}{RESET}")
+    else:
+        typer.echo("-" * 80)
+        typer.echo(f"AXIOM TRACE LOG ({len(frames)} entries)")
+        typer.echo("-" * 80)
+    
+    # Frames
+    for frame in frames:
+        typer.echo(_format_frame(frame, colorize))
+    
+    if colorize:
+        typer.echo(f"{BOLD}{'─' * 80}{RESET}")
+
+
+@app.command()
+def watch(
+    vault: Annotated[str, typer.Option("--vault", "-v", help="Path to vault")] = ".axiom_trace",
+    session_filter: Annotated[Optional[str], typer.Option("--session", "-s", help="Filter by session")] = None,
+    no_color: Annotated[bool, typer.Option("--no-color", help="Disable colors")] = False
+):
+    """
+    Watch traces in real-time (like tail -f).
+    
+    Monitors the trace file and displays new entries as they arrive.
+    Press Ctrl+C to stop.
+    
+    Examples:
+        axiom watch                  # Watch all traces
+        axiom watch --session abc    # Watch specific session
+    """
+    import time
+    import orjson
+    
+    vault_path = Path(vault)
+    frames_file = vault_path / "frames.jsonl"
+    
+    colorize = not no_color and sys.stdout.isatty()
+    
+    if colorize:
+        typer.echo(f"{BOLD}Watching {vault} for new traces...{RESET}")
+        typer.echo(f"{DIM}Press Ctrl+C to stop{RESET}")
+        typer.echo(f"{BOLD}{'─' * 80}{RESET}")
+    else:
+        typer.echo(f"Watching {vault} for new traces...")
+        typer.echo("Press Ctrl+C to stop")
+        typer.echo("-" * 80)
+    
+    # Track file position
+    last_pos = 0
+    if frames_file.exists():
+        last_pos = frames_file.stat().st_size
+    
+    try:
+        while True:
+            if not frames_file.exists():
+                time.sleep(0.5)
+                continue
+            
+            current_size = frames_file.stat().st_size
+            
+            if current_size > last_pos:
+                with open(frames_file, "rb") as f:
+                    f.seek(last_pos)
+                    new_data = f.read()
+                    last_pos = f.tell()
+                
+                for line in new_data.split(b"\n"):
+                    if line.strip():
+                        try:
+                            frame = orjson.loads(line)
+                            
+                            # Apply filter
+                            if session_filter and frame.get("session_id") != session_filter:
+                                continue
+                            
+                            typer.echo(_format_frame(frame, colorize))
+                        except Exception:
+                            pass
+            
+            time.sleep(0.2)
+            
+    except KeyboardInterrupt:
+        typer.echo("\nStopped watching.")
+
+
 def main():
     """CLI entry point."""
     app()
