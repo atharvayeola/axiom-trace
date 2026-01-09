@@ -87,41 +87,64 @@ class ObserverSession:
         self, 
         tool_name: str, 
         args: dict[str, Any],
+        reasoning: str | None = None,
+        caused_by: str | None = None,
         **metadata: Any
     ) -> str:
-        """Record a tool call event."""
+        """Record a tool call event with agent-friendly fields."""
         metadata["tool_name"] = tool_name
         
-        return self.trace.record({
+        content: dict[str, Any] = {
+            "json": {"tool": tool_name, "args": args},
+            "input": f"Calling {tool_name} with {args}"
+        }
+        if reasoning:
+            content["reasoning"] = reasoning
+        
+        event: dict[str, Any] = {
             "session_id": self.session_id,
             "event_type": "tool_call",
             "actor": {"type": self.actor_type, "id": self.actor_id},
-            "content": {"json": {"tool": tool_name, "args": args}},
+            "content": content,
             "metadata": metadata
-        })
+        }
+        if caused_by:
+            event["caused_by"] = caused_by
+        
+        return self.trace.record(event)
     
     def record_tool_output(
         self, 
         tool_name: str, 
         output: Any,
+        success: bool = True,
+        artifacts: list[str] | None = None,
         **metadata: Any
     ) -> str:
-        """Record a tool output event."""
+        """Record a tool output event with agent-friendly fields."""
         metadata["tool_name"] = tool_name
         
         content: dict[str, Any]
         if isinstance(output, str):
-            content = {"text": output}
+            content = {"text": output, "output": output}
         else:
-            content = {"json": {"tool": tool_name, "output": output}}
+            content = {
+                "json": {"tool": tool_name, "output": output},
+                "output": str(output)[:2000]
+            }
         
-        return self.trace.record({
+        event: dict[str, Any] = {
             "session_id": self.session_id,
             "event_type": "tool_output",
             "actor": {"type": "tool", "id": tool_name},
             "content": content,
-            "metadata": metadata
-        })
+            "metadata": metadata,
+            "success": success
+        }
+        if artifacts:
+            event["artifacts"] = artifacts
+        
+        return self.trace.record(event)
     
     def record_final_result(self, result: Any, **metadata: Any) -> str:
         """Record a final result event."""

@@ -203,7 +203,7 @@ class AxiomTrace:
         if actor is None:
             actor = {"type": "agent", "id": "default"}
         
-        # Build complete frame
+        # Build complete frame with agent-friendly fields
         frame = {
             "frame_id": frame_id,
             "session_id": event.get("session_id", str(uuid.uuid4())),
@@ -216,6 +216,14 @@ class AxiomTrace:
             "prev_hash": "",  # Will be set during flush
             "frame_hash": ""  # Will be computed during flush
         }
+        
+        # Add optional agent-friendly fields if provided
+        if "success" in event:
+            frame["success"] = event["success"]
+        if "caused_by" in event:
+            frame["caused_by"] = event["caused_by"]
+        if "artifacts" in event:
+            frame["artifacts"] = event["artifacts"]
         
         # Validate
         validate_frame(frame)
@@ -234,6 +242,82 @@ class AxiomTrace:
         
         logger.info(f"Recorded frame {frame_id}")
         return frame_id
+    
+    def record_action(
+        self,
+        event_type: str,
+        input: str | None = None,
+        output: str | None = None,
+        reasoning: str | None = None,
+        success: bool | None = None,
+        caused_by: str | None = None,
+        artifacts: list[str] | None = None,
+        session_id: str | None = None,
+        actor_id: str = "agent",
+        tool_name: str | None = None,
+        **metadata
+    ) -> str:
+        """
+        Record an action with agent-friendly fields.
+        
+        This is a convenience method that makes it easy to record events
+        with clear input/output/reasoning for agent retrospection.
+        
+        Args:
+            event_type: Type of event (thought, tool_call, etc.)
+            input: What prompted this action
+            output: What was produced
+            reasoning: Why this action was taken
+            success: Whether the action succeeded
+            caused_by: frame_id of the triggering event
+            artifacts: List of files/resources created
+            session_id: Session ID (generated if not provided)
+            actor_id: Actor identifier
+            tool_name: Name of tool (for tool_call/tool_output events)
+            **metadata: Additional metadata fields
+            
+        Returns:
+            The frame_id of the recorded frame
+        """
+        # Build content with agent-friendly fields
+        content: dict[str, Any] = {}
+        
+        if input:
+            content["input"] = input
+        if output:
+            content["output"] = output
+            content["text"] = output  # Also set text for compatibility
+        if reasoning:
+            content["reasoning"] = reasoning
+            content["rationale_summary"] = reasoning  # For thought events
+        
+        # Ensure we have at least text content
+        if "text" not in content:
+            content["text"] = input or output or reasoning or ""
+        
+        # Build metadata
+        meta = dict(metadata)
+        if tool_name:
+            meta["tool_name"] = tool_name
+        
+        # Build event
+        event: dict[str, Any] = {
+            "event_type": event_type,
+            "actor": {"type": "agent", "id": actor_id},
+            "content": content,
+            "metadata": meta
+        }
+        
+        if session_id:
+            event["session_id"] = session_id
+        if success is not None:
+            event["success"] = success
+        if caused_by:
+            event["caused_by"] = caused_by
+        if artifacts:
+            event["artifacts"] = artifacts
+        
+        return self.record(event)
     
     def _generate_vector_key(self, event: dict[str, Any]) -> str:
         """Generate a vector key for search indexing."""

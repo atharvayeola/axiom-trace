@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://axiom-trace.dev/schemas/axiom_frame_v1_1.json",
-  "title": "Axiom Frame v1.1",
-  "description": "Schema for a single immutable event record in the Axiom Trace vault",
+  "$id": "https://axiom-trace.dev/schemas/axiom_frame_v1_2.json",
+  "title": "Axiom Frame v1.2",
+  "description": "Schema for a single immutable event record in the Axiom Trace vault. v1.2 adds agent-friendly fields for retrospection.",
   "type": "object",
   "required": [
     "frame_id",
@@ -24,8 +24,7 @@
     },
     "session_id": {
       "type": "string",
-      "format": "uuid",
-      "description": "UUIDv4 identifier for the session this frame belongs to"
+      "description": "Identifier for the session this frame belongs to"
     },
     "timestamp": {
       "type": "string",
@@ -34,24 +33,23 @@
     },
     "event_type": {
       "type": "string",
-      "enum": [
-        "thought",
-        "tool_call",
-        "tool_output",
-        "user_input",
-        "final_result",
-        "system_event",
-        "error"
-      ],
       "description": "Type of event this frame represents"
     },
     "actor": {
       "type": "object",
-      "required": ["type", "id"],
+      "required": [
+        "type",
+        "id"
+      ],
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["agent", "user", "system", "tool"],
+          "enum": [
+            "agent",
+            "user",
+            "system",
+            "tool"
+          ],
           "description": "Type of actor"
         },
         "id": {
@@ -69,7 +67,7 @@
     },
     "content": {
       "type": "object",
-      "description": "Content of the frame - must have exactly one of text or json",
+      "description": "Content of the frame with agent-friendly fields",
       "properties": {
         "text": {
           "type": "string",
@@ -93,19 +91,24 @@
         "raw_thought": {
           "type": "string",
           "maxLength": 50000,
-          "description": "Raw thought content (optional, omitted by default)"
+          "description": "Raw thought content (optional)"
+        },
+        "input": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "What prompted this action (user request, trigger) - AGENT FRIENDLY"
+        },
+        "output": {
+          "type": "string",
+          "maxLength": 10000,
+          "description": "What was produced (result, artifact) - AGENT FRIENDLY"
+        },
+        "reasoning": {
+          "type": "string",
+          "maxLength": 5000,
+          "description": "Why this action was taken - AGENT FRIENDLY"
         }
       },
-      "oneOf": [
-        {
-          "required": ["text"],
-          "not": { "required": ["json"] }
-        },
-        {
-          "required": ["json"],
-          "not": { "required": ["text"] }
-        }
-      ],
       "additionalProperties": false
     },
     "metadata": {
@@ -121,9 +124,15 @@
         "token_usage": {
           "type": "object",
           "properties": {
-            "prompt": { "type": "integer" },
-            "completion": { "type": "integer" },
-            "total": { "type": "integer" }
+            "prompt": {
+              "type": "integer"
+            },
+            "completion": {
+              "type": "integer"
+            },
+            "total": {
+              "type": "integer"
+            }
           },
           "additionalProperties": false
         },
@@ -132,7 +141,11 @@
         },
         "risk_level": {
           "type": "string",
-          "enum": ["low", "medium", "high"]
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
         },
         "tags": {
           "type": "array",
@@ -166,6 +179,23 @@
     "frame_hash": {
       "type": "string",
       "description": "SHA-256 hash of this frame's canonical representation"
+    },
+    "success": {
+      "type": "boolean",
+      "description": "Whether the action succeeded - AGENT FRIENDLY"
+    },
+    "caused_by": {
+      "type": "string",
+      "description": "frame_id of the event that triggered this action - AGENT FRIENDLY"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      },
+      "maxItems": 100,
+      "description": "List of files/resources created or modified - AGENT FRIENDLY"
     }
   },
   "additionalProperties": false

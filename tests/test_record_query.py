@@ -61,16 +61,17 @@ class TestRecord:
             assert len(ids) == 5
             assert len(set(ids)) == 5  # All unique
     
-    def test_record_invalid_event_raises(self, temp_vault):
-        """Recording an invalid event should raise AxiomValidationError."""
+    def test_record_custom_event_type_allowed(self, temp_vault):
+        """Recording a custom event type should now succeed in v1.2+."""
         with AxiomTrace(temp_vault, auto_flush=False) as trace:
-            with pytest.raises(AxiomValidationError):
-                trace.record({
-                    "event_type": "invalid_type",
-                    "actor": {"type": "agent", "id": "test"},
-                    "content": {"text": "test"},
-                    "metadata": {}
-                })
+            # Custom event types are now allowed
+            frame_id = trace.record({
+                "event_type": "custom_observation",
+                "actor": {"type": "agent", "id": "test"},
+                "content": {"text": "test"},
+                "metadata": {}
+            })
+            assert frame_id is not None
     
     def test_record_persists_after_close(self, temp_vault):
         """Recorded events should persist after closing vault."""

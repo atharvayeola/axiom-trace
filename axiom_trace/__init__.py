@@ -10,7 +10,7 @@ from axiom_trace.observer import observe, session, set_global_trace, get_global_
 from axiom_trace.schema import AxiomValidationError
 from axiom_trace.backend import AxiomLockError
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 __all__ = [
     "AxiomTrace",
     "observe",
