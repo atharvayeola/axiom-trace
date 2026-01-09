@@ -1,198 +1,170 @@
 # Axiom Trace
 
-**Local-first, append-only trace vault for AI agents with cryptographic integrity and hybrid search.**
-
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![PyPI version](https://badge.fury.io/py/axiom-trace.svg)](https://badge.fury.io/py/axiom-trace)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-## Installation
+**Local-first, append-only trace vault for AI agents with cryptographic integrity.**
 
 ```bash
 pip install axiom-trace
 ```
 
-## Quick Start
+---
+
+## Quick Start (3 Lines)
+
+```python
+from axiom_trace import trace
+
+trace.log("Processing user request")
+trace.thought("Need to fetch user data")
+trace.tool("database_query", {"table": "users"})
+trace.done("Found 10 users")
+```
+
+That's it! Traces are saved to `.axiom_trace/` in your project.
+
+---
+
+## View Your Traces
+
+```bash
+# Pretty print recent traces
+axiom log
+
+# Watch live (like tail -f)
+axiom watch
+```
+
+**Output:**
+```
+────────────────────────────────────────────────────────────────────────────────
+AXIOM TRACE LOG (4 entries)
+────────────────────────────────────────────────────────────────────────────────
+2026-01-09T03:56:43 system_event  Processing user request
+2026-01-09T03:56:43 thought       Need to fetch user data
+2026-01-09T03:56:43 tool_call     ✓ database_query
+2026-01-09T03:56:43 final_result  ✓ Found 10 users
+────────────────────────────────────────────────────────────────────────────────
+```
+
+---
+
+## API Reference
+
+### Quick Trace Methods
+
+| Method | When to Use | Example |
+|--------|-------------|---------|
+| `trace.log(msg)` | Simple log message | `trace.log("Starting")` |
+| `trace.thought(reasoning)` | Agent is thinking/deciding | `trace.thought("Need API call")` |
+| `trace.tool(name, args)` | Calling a tool/function | `trace.tool("search", {"q": "..."})` |
+| `trace.done(result)` | Task completed | `trace.done("Success!")` |
+| `trace.error(msg, exc)` | Something failed | `trace.error("Failed", e)` |
+| `trace.input(text)` | User said something | `trace.input("What's the weather?")` |
+
+### Auto-Trace Decorator
+
+```python
+from axiom_trace import auto_trace
+
+@auto_trace
+def fetch_user(user_id: int):
+    return db.get(user_id)
+
+# Automatically captures: function name, args, result, timing, exceptions
+```
+
+---
+
+## Agent-Friendly Fields
+
+Traces include fields designed for AI agent retrospection:
+
+```python
+trace.record({
+    "event_type": "tool_call",
+    "content": {
+        "input": "User asked: Build REST API",      # What prompted this
+        "output": "Created api/users.py",           # What was produced
+        "reasoning": "Need CRUD endpoints"          # Why this action
+    },
+    "success": True,                                # Did it work?
+    "artifacts": ["api/users.py"],                  # Files created
+    "caused_by": "previous-frame-id"                # Causality chain
+})
+```
+
+---
+
+## Memvid Cloud (Optional)
+
+For enhanced semantic search, add your Memvid API key:
+
+```bash
+# In your project's .env file
+MEMVID_API_KEY=mv2_your_key_here
+```
+
+Axiom Trace automatically loads from `.env` when you import it.
+
+---
+
+## CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `axiom log` | Pretty print recent traces |
+| `axiom watch` | Live trace monitoring |
+| `axiom query --prompt "..."` | Search traces semantically |
+| `axiom verify` | Check hash chain integrity |
+| `axiom stats` | Show vault statistics |
+| `axiom export --session ID` | Export session to Markdown |
+
+---
+
+## Advanced: Full API
+
+For more control, use the `AxiomTrace` class directly:
 
 ```python
 from axiom_trace import AxiomTrace
 
-# Create a vault (defaults to .axiom_trace/ in current directory)
-with AxiomTrace() as trace:
-    # Record an event
-    frame_id = trace.record({
+with AxiomTrace(vault_dir="./my_vault") as ax:
+    # Record with full control
+    ax.record({
         "event_type": "thought",
         "content": {
-            "text": "Analyzing user request...",
-            "rationale_summary": "Breaking down the problem"
-        },
-        "metadata": {"model_name": "gpt-4"}
+            "text": "Analyzing request",
+            "rationale_summary": "Need to understand intent"
+        }
     })
     
-    # Query the vault
-    results = trace.query("user request", limit=5)
+    # Query with semantic search
+    results = ax.query("user request", limit=5)
     
     # Verify integrity
-    status = trace.verify_integrity()
-    print(f"Integrity OK: {status['ok']}")
+    status = ax.verify_integrity()
 ```
-
----
-
-## Memvid Cloud Integration (Optional)
-
-Axiom Trace uses [Memvid](https://memvid.com) for hybrid semantic search. You can enhance search quality with a Memvid API key.
-
-### Setup in Your Project
-
-1. **Create a `.env` file in your project root:**
-
-```bash
-# In your project directory (e.g., my_project/)
-echo "MEMVID_API_KEY=mv2_your_api_key_here" > .env
-
-# Add to .gitignore to keep it secure
-echo ".env" >> .gitignore
-```
-
-2. **That's it!** Axiom Trace automatically loads the key:
-
-```python
-from axiom_trace import AxiomTrace
-
-# Automatically uses MEMVID_API_KEY from your project's .env
-trace = AxiomTrace()
-```
-
-### Alternative: Pass Key Directly
-
-```python
-trace = AxiomTrace(memvid_api_key="mv2_your_api_key_here")
-```
-
-### How It Works
-
-```
-your_project/
-├── .env                 ← Put MEMVID_API_KEY here
-├── .gitignore          ← Add .env to keep key secure
-├── main.py             ← from axiom_trace import AxiomTrace
-└── .axiom_trace/       ← Default vault location
-```
-
-When you import `axiom_trace`, it uses `python-dotenv` to load your project's `.env` file automatically.
-
----
-
-## Observer Pattern
-
-```python
-from axiom_trace import AxiomTrace, session, observe, set_global_trace
-
-trace = AxiomTrace()
-set_global_trace(trace)
-
-# Context manager for sessions
-with session(session_id="my-session") as obs:
-    obs.record_user_input("What is the weather?")
-    obs.record_thought("Need to call weather API", "Determining tool to use")
-    obs.record_tool_call("weather_api", {"city": "NYC"})
-    obs.record_tool_output("weather_api", {"temp": 72, "condition": "sunny"})
-    obs.record_final_result("The weather in NYC is 72°F and sunny!")
-
-# Decorator for automatic tracing
-@observe(event_type="tool_call")
-def search_database(query: str) -> list:
-    return ["result1", "result2"]
-```
-
----
-
-## CLI
-
-```bash
-# Record an event from JSON file
-axiom record --vault ./my_vault --event event.json
-
-# Query the vault
-axiom query --vault ./my_vault --prompt "weather" --limit 5
-
-# Export a session to Markdown
-axiom export --vault ./my_vault --session <uuid> --out session.md
-
-# Verify vault integrity
-axiom verify --vault ./my_vault
-
-# Show statistics
-axiom stats --vault ./my_vault
-```
-
----
-
-## Event Types
-
-| Type | Description |
-|------|-------------|
-| `thought` | Agent reasoning (requires `rationale_summary`) |
-| `tool_call` | Tool invocation (requires `tool_name` in metadata) |
-| `tool_output` | Tool result (requires `tool_name` in metadata) |
-| `user_input` | User message |
-| `final_result` | Final response |
-| `system_event` | System notifications |
-| `error` | Error with stack trace |
 
 ---
 
 ## Vault Structure
 
 ```
-.axiom_trace/              # Default location (or specify your own)
+.axiom_trace/
+├── frames.jsonl           # Your traces (one JSON per line)
 ├── vault.manifest.json    # Metadata + head hash
-├── vault.lock             # Write lock
-├── vault.mv2              # Memvid index
-├── frames.jsonl           # Append-only frame storage
-└── axiom.log              # Internal logs
+├── vault_index.json       # Search index
+└── vault.mv2              # Memvid video index
 ```
 
 ---
 
-## Integrity Verification
+## Why Axiom Trace?
 
-Axiom Trace uses SHA-256 hash chains for tamper detection:
-
-```python
-result = trace.verify_integrity()
-# {
-#     "ok": True,
-#     "checked_frames": 150,
-#     "head_hash": "abc123...",
-#     "error": None
-# }
-```
-
-Detects: modified content, deleted frames, reordered frames, manifest tampering.
-
----
-
-## API Reference
-
-### `AxiomTrace(vault_dir=None, memvid_api_key=None, ...)`
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `vault_dir` | `.axiom_trace/` | Vault storage location |
-| `memvid_api_key` | From `.env` | Memvid API key for cloud features |
-| `redaction_enabled` | `True` | Auto-redact secrets |
-| `auto_flush` | `True` | Background flush every 5s |
-
-### Methods
-
-- `record(event)` → `str` (frame_id)
-- `query(prompt, limit=5, filters=None)` → `list[dict]`
-- `export_session(session_id, out_path, format="md")`
-- `verify_integrity()` → `dict`
-- `stats()` → `dict`
-- `close()`
+- **Local-first** - Data stays on your machine
+- **Append-only** - Can't delete or modify past traces
+- **Tamper-evident** - SHA-256 hash chain detects modifications
+- **Agent-friendly** - Fields designed for AI retrospection
+- **Zero config** - Works out of the box
 
 ---
 
