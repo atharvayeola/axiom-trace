@@ -397,6 +397,61 @@ def watch(
         typer.echo("\nStopped watching.")
 
 
+@app.command()
+def skill(
+    show: Annotated[bool, typer.Option("--show", "-s", help="Print skill to stdout")] = False,
+    install: Annotated[bool, typer.Option("--install", "-i", help="Install to ~/.claude/")] = False,
+    output: Annotated[Optional[str], typer.Option("--output", "-o", help="Output path")] = None
+):
+    """
+    Access the TRACE.md Claude skill.
+    
+    The skill teaches Claude how to use axiom-trace for recording
+    and searching agent traces.
+    
+    Examples:
+        axiom skill --show           # Print to stdout
+        axiom skill --install        # Install to ~/.claude/TRACE.md
+        axiom skill -o ./TRACE.md    # Save to specific path
+    """
+    import shutil
+    
+    # Find the bundled skill file
+    skill_path = Path(__file__).parent / "skills" / "TRACE.md"
+    
+    if not skill_path.exists():
+        typer.echo("Error: TRACE.md skill not found in package", err=True)
+        raise typer.Exit(1)
+    
+    skill_content = skill_path.read_text()
+    
+    if show:
+        typer.echo(skill_content)
+        return
+    
+    if install:
+        claude_dir = Path.home() / ".claude"
+        claude_dir.mkdir(exist_ok=True)
+        dest = claude_dir / "TRACE.md"
+        shutil.copy(skill_path, dest)
+        typer.echo(f"✓ Installed skill to {dest}")
+        return
+    
+    if output:
+        dest = Path(output)
+        shutil.copy(skill_path, dest)
+        typer.echo(f"✓ Saved skill to {dest}")
+        return
+    
+    # Default: show help
+    typer.echo("TRACE.md - Claude Skill for Axiom Trace")
+    typer.echo("")
+    typer.echo("Usage:")
+    typer.echo("  axiom skill --show      Print skill to stdout")
+    typer.echo("  axiom skill --install   Install to ~/.claude/TRACE.md")
+    typer.echo("  axiom skill -o FILE     Save to specific path")
+
+
 def main():
     """CLI entry point."""
     app()
