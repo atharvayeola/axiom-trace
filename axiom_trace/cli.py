@@ -400,19 +400,26 @@ def watch(
 @app.command()
 def skill(
     show: Annotated[bool, typer.Option("--show", "-s", help="Print skill to stdout")] = False,
-    install: Annotated[bool, typer.Option("--install", "-i", help="Install to ~/.claude/")] = False,
+    install: Annotated[Optional[str], typer.Option("--install", "-i", help="Install for agent: claude, antigravity, all")] = None,
     output: Annotated[Optional[str], typer.Option("--output", "-o", help="Output path")] = None
 ):
     """
-    Access the TRACE.md Claude skill.
+    Access the TRACE.md skill for AI agents.
     
-    The skill teaches Claude how to use axiom-trace for recording
-    and searching agent traces.
+    The skill teaches AI agents how to use axiom-trace for recording
+    and searching traces.
+    
+    Supported agents:
+        claude       - Installs to ~/.claude/TRACE.md
+        antigravity  - Installs to .gemini/TRACE.md (workspace)
+        all          - Installs for all supported agents
     
     Examples:
-        axiom skill --show           # Print to stdout
-        axiom skill --install        # Install to ~/.claude/TRACE.md
-        axiom skill -o ./TRACE.md    # Save to specific path
+        axiom skill --show                  # Print to stdout
+        axiom skill --install claude        # Install for Claude Code
+        axiom skill --install antigravity   # Install for Antigravity
+        axiom skill --install all           # Install for all agents
+        axiom skill -o ./TRACE.md           # Save to specific path
     """
     import shutil
     
@@ -430,11 +437,32 @@ def skill(
         return
     
     if install:
-        claude_dir = Path.home() / ".claude"
-        claude_dir.mkdir(exist_ok=True)
-        dest = claude_dir / "TRACE.md"
-        shutil.copy(skill_path, dest)
-        typer.echo(f"✓ Installed skill to {dest}")
+        agent = install.lower()
+        installed = []
+        
+        # Claude Code: ~/.claude/
+        if agent in ("claude", "all"):
+            claude_dir = Path.home() / ".claude"
+            claude_dir.mkdir(exist_ok=True)
+            dest = claude_dir / "TRACE.md"
+            shutil.copy(skill_path, dest)
+            installed.append(f"Claude: {dest}")
+        
+        # Antigravity: .gemini/ in workspace
+        if agent in ("antigravity", "all"):
+            gemini_dir = Path.cwd() / ".gemini"
+            gemini_dir.mkdir(exist_ok=True)
+            dest = gemini_dir / "TRACE.md"
+            shutil.copy(skill_path, dest)
+            installed.append(f"Antigravity: {dest}")
+        
+        if not installed:
+            typer.echo(f"Unknown agent: {agent}", err=True)
+            typer.echo("Supported: claude, antigravity, all")
+            raise typer.Exit(1)
+        
+        for loc in installed:
+            typer.echo(f"✓ Installed skill for {loc}")
         return
     
     if output:
@@ -444,12 +472,14 @@ def skill(
         return
     
     # Default: show help
-    typer.echo("TRACE.md - Claude Skill for Axiom Trace")
+    typer.echo("TRACE.md - AI Agent Skill for Axiom Trace")
     typer.echo("")
     typer.echo("Usage:")
-    typer.echo("  axiom skill --show      Print skill to stdout")
-    typer.echo("  axiom skill --install   Install to ~/.claude/TRACE.md")
-    typer.echo("  axiom skill -o FILE     Save to specific path")
+    typer.echo("  axiom skill --show                Print skill to stdout")
+    typer.echo("  axiom skill --install claude      Install for Claude Code")
+    typer.echo("  axiom skill --install antigravity Install for Antigravity")
+    typer.echo("  axiom skill --install all         Install for all agents")
+    typer.echo("  axiom skill -o FILE               Save to specific path")
 
 
 def main():
