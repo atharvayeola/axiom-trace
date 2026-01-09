@@ -19,7 +19,7 @@ from axiom_trace.schema import AxiomValidationError
 from axiom_trace.backend import AxiomLockError
 from axiom_trace.quick import trace, auto_trace, QuickTrace
 
-__version__ = "1.4.1"
+__version__ = "1.4.2"
 __all__ = [
     # Core
     "AxiomTrace",
