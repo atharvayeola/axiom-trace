@@ -59,6 +59,23 @@ AXIOM TRACE LOG (4 entries)
 | `trace.done(result)` | Task completed | `trace.done("Success!")` |
 | `trace.error(msg, exc)` | Something failed | `trace.error("Failed", e)` |
 | `trace.input(text)` | User said something | `trace.input("What's the weather?")` |
+| `trace.search(query)` | Semantic search traces | `trace.search("authentication")` |
+| `trace.context(query)` | Get past context as string | `trace.context("API design")` |
+
+### Agent Retrospection (Semantic Search)
+
+```python
+from axiom_trace import trace
+
+# Search past traces semantically (powered by Memvid)
+results = trace.search("user authentication", limit=5)
+for r in results:
+    print(f"{r['event_type']}: {r['content']}")
+
+# Get context for prompts
+past_context = trace.context("building REST APIs")
+prompt = f"Based on my past work:\n{past_context}\n\nNow I need to..."
+```
 
 ### Auto-Trace Decorator
 

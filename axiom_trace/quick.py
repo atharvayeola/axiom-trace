@@ -286,6 +286,97 @@ class QuickTrace:
             "metadata": metadata
         })
     
+    def search(
+        self, 
+        query: str, 
+        limit: int = 5,
+        event_type: str | None = None,
+        session_id: str | None = None
+    ) -> list[dict]:
+        """
+        Search traces using semantic similarity (powered by Memvid).
+        
+        This enables coding agents to find relevant past context
+        from their traces. The search uses vector embeddings for
+        semantic matching, not just keyword matching.
+        
+        Args:
+            query: Natural language search query
+            limit: Maximum number of results (default: 5)
+            event_type: Optional filter by event type
+            session_id: Optional filter by session
+            
+        Returns:
+            List of matching frames, ranked by relevance
+            
+        Example:
+            # Find relevant past context
+            results = trace.search("user authentication")
+            for r in results:
+                print(f"{r['event_type']}: {r['content']}")
+            
+            # Filter by type
+            thoughts = trace.search("API design", event_type="thought")
+            
+            # Agent retrospection pattern
+            past_work = trace.search("similar task I did before")
+            context = "\\n".join(r['content'].get('text', '') for r in past_work)
+        """
+        trace = self._ensure_initialized()
+        
+        # Build filters
+        filters = {}
+        if event_type:
+            filters["event_type"] = event_type
+        if session_id:
+            filters["session_id"] = session_id
+        
+        return trace.query(query, limit, filters if filters else None)
+    
+    def context(self, query: str, limit: int = 5) -> str:
+        """
+        Get relevant context from past traces as a formatted string.
+        
+        This is a convenience method for coding agents that want
+        to retrieve past context in a format ready for use in prompts.
+        
+        Args:
+            query: Natural language query for what context to find
+            limit: Maximum number of traces to include
+            
+        Returns:
+            Formatted string with relevant past traces
+            
+        Example:
+            # Get context for current task
+            past_context = trace.context("building REST APIs")
+            
+            # Use in agent prompt
+            prompt = f'''
+            Here's what I did before on similar tasks:
+            {past_context}
+            
+            Now I need to: {current_task}
+            '''
+        """
+        results = self.search(query, limit)
+        
+        if not results:
+            return "No relevant past traces found."
+        
+        lines = []
+        for r in results:
+            event_type = r.get("event_type", "unknown")
+            content = r.get("content", {})
+            
+            # Get the most useful text
+            text = content.get("reasoning") or content.get("output") or content.get("text", "")
+            if text:
+                text = text[:500]  # Truncate for prompt efficiency
+                lines.append(f"[{event_type}] {text}")
+        
+        return "\n".join(lines)
+    
     def close(self):
         """Close the trace and flush all pending data."""
         if self._trace:
